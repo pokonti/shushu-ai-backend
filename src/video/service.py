@@ -1,9 +1,14 @@
 import uuid
+import subprocess
 from pathlib import Path
 from fastapi import UploadFile
 
+from src.preprocessing.service import transcribe_audio
+
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
+AUDIO_DIR = Path("audio")
+AUDIO_DIR.mkdir(exist_ok=True)
 
 def save_uploaded_file(file: UploadFile) -> dict:
     file_ext = Path(file.filename).suffix
@@ -21,11 +26,6 @@ def save_uploaded_file(file: UploadFile) -> dict:
         "path": str(saved_path)
     }
 
-import subprocess
-
-AUDIO_DIR = Path("audio")
-AUDIO_DIR.mkdir(exist_ok=True)
-
 def extract_audio_from_video(video_path: str, audio_filename: str = None) -> str:
     video_path = Path(video_path)
     audio_filename = audio_filename or video_path.stem + ".wav"
@@ -33,15 +33,17 @@ def extract_audio_from_video(video_path: str, audio_filename: str = None) -> str
 
     cmd = [
         "ffmpeg",
-        "-y",                     # Overwrite existing
+        "-y",                    # Overwrite existing
         "-i", str(video_path),   # Input video
         "-vn",                   # Disable video output
-        "-acodec", "pcm_s16le",  # WAV codec
-        "-ar", "16000",          # 16 kHz (Whisper-friendly)
-        "-ac", "1",              # Mono
+        # "-acodec", "pcm_s16le",  # WAV codec
+        # "-ar", "16000",          # 16 kHz (Whisper-friendly)
+        # "-ac", "1",              # Mono
         str(output_path)
     ]
 
     subprocess.run(cmd, check=True)
 
+    print(transcribe_audio(output_path))
     return str(output_path)
+

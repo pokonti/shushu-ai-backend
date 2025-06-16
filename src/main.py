@@ -1,5 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI
 from src.video.router import router as video_router
 
 app = FastAPI()
