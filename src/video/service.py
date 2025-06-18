@@ -36,14 +36,34 @@ def extract_audio_from_video(video_path: str, audio_filename: str = None) -> str
         "-y",                    # Overwrite existing
         "-i", str(video_path),   # Input video
         "-vn",                   # Disable video output
-        # "-acodec", "pcm_s16le",  # WAV codec
-        # "-ar", "16000",          # 16 kHz (Whisper-friendly)
-        # "-ac", "1",              # Mono
+        "-acodec", "pcm_s16le",  # WAV codec
+        "-ar", "16000",          # 16 kHz (Whisper-friendly)
+        "-ac", "1",              # Mono
         str(output_path)
     ]
 
     subprocess.run(cmd, check=True)
 
-    print(transcribe_audio(output_path))
+    # print(transcribe_audio(output_path))
     return str(output_path)
 
+
+def replace_audio_in_video(video_path: str, new_audio_path: str, output_path: str = None) -> str:
+    video_path = Path(video_path)
+    new_audio_path = Path(new_audio_path)
+    output_path = output_path or str(video_path.parent / f"{video_path.stem}_with_audio.mp4")
+
+    cmd = [
+        "ffmpeg",
+        "-y",  # overwrite
+        "-i", str(video_path),
+        "-i", str(new_audio_path),
+        "-c:v", "copy",
+        "-map", "0:v:0",
+        "-map", "1:a:0",
+        "-shortest",
+        str(output_path)
+    ]
+
+    subprocess.run(cmd, check=True)
+    return output_path
