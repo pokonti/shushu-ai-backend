@@ -3,9 +3,8 @@ import subprocess
 from pathlib import Path
 from fastapi import UploadFile
 
-from src.preprocessing.service import transcribe_audio
 
-UPLOAD_DIR = Path("uploads")
+UPLOAD_DIR = Path("video")
 UPLOAD_DIR.mkdir(exist_ok=True)
 AUDIO_DIR = Path("audio")
 AUDIO_DIR.mkdir(exist_ok=True)
@@ -15,7 +14,6 @@ def save_uploaded_file(file: UploadFile) -> dict:
     file_id = str(uuid.uuid4())
     saved_path = UPLOAD_DIR / f"{file_id}{file_ext}"
 
-    # Save file to disk
     with open(saved_path, "wb") as f:
         content = file.file.read()
         f.write(content)
@@ -44,7 +42,6 @@ def extract_audio_from_video(video_path: str, audio_filename: str = None) -> str
 
     subprocess.run(cmd, check=True)
 
-    # print(transcribe_audio(output_path))
     return str(output_path)
 
 

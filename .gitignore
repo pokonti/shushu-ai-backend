@@ -42,6 +42,6 @@ ehthumbs.db
 Thumbs.db
 
 # Project specific
-uploads/
+video/
 audio/
 *.log 
