@@ -1,12 +1,15 @@
+from fastapi.responses import JSONResponse
+from fastapi import HTTPException
+
 from pydub import AudioSegment
 from pathlib import Path
 from moviepy import VideoFileClip, concatenate_videoclips
 
-from src.preprocessing.service import transcribe_audio
+from src.preprocessing.service import transcribe_audio, find_video_file
 
 
 def get_filler_word_timestamps(words: list) -> list:
-    FILLER_WORDS = {"um", "uh", "like", "you know", "so", "actually", "basically", "yeah"}
+    FILLER_WORDS = {"um", "uh", "like", "so", "actually", "basically", "yeah"}
 
     return [
         {"start": word["start"], "end": word["end"]}
@@ -56,6 +59,90 @@ def remove_filler_words_from_video(video_path: str, filler_timestamps: list, out
     return str(output_path)
 
 
+from moviepy import VideoFileClip, concatenate_videoclips, CompositeVideoClip
+from moviepy.video.fx  import CrossFadeIn
+from moviepy.audio.fx import AudioFadeIn
+from pathlib import Path
+from typing import List
+
+
+def remove_filler_words_smooth(video_path: str,
+                            filler_timestamps: List[dict],
+                            output_path: str = None,
+                            transition_duration: float = 0.3) -> str:
+    """
+    Professional-grade filler word removal with proper CrossFadeIn transitions.
+
+    Args:
+        video_path: Input video path
+        filler_timestamps: List of {'start':, 'end':} dicts
+        output_path: Optional output path
+        transition_duration: Crossfade duration (0.1-1.0 seconds)
+
+    Returns:
+        Path to processed video
+    """
+    # Load video
+    video = VideoFileClip(video_path)
+    clips = []
+
+    # Sort timestamps chronologically
+    filler_timestamps = sorted(filler_timestamps, key=lambda x: x['start'])
+
+    # Build clips with transitions
+    prev_end = 0
+    for i, filler in enumerate(filler_timestamps):
+        if filler["start"] > prev_end:
+            clip = video.subclipped(prev_end, filler["start"])
+
+            # Apply crossfade to all clips except first
+            if i > 0:
+                clip = CompositeVideoClip([
+                    clip.with_effects([
+                        CrossFadeIn(transition_duration),
+                        AudioFadeIn(transition_duration)
+                    ])
+                ])
+
+            clips.append(clip)
+
+        prev_end = filler["end"]
+
+    # Add final clip
+    if prev_end < video.duration:
+        final_clip = video.subclipped(prev_end, video.duration)
+        if clips:  # Apply fade if not first clip
+            final_clip = CompositeVideoClip([
+                final_clip.with_effects([
+                    CrossFadeIn(transition_duration),
+                    AudioFadeIn(transition_duration)
+                ])
+            ])
+        clips.append(final_clip)
+
+    # Concatenate with composition
+    final = concatenate_videoclips(
+        clips,
+        method="compose",
+        padding=-transition_duration if len(clips) > 1 else 0
+    )
+
+    # Configure output
+    output_path = output_path or Path(video_path).with_name(
+        f"{Path(video_path).stem}_pro_clean.mp4"
+    )
+
+    # Optimized render settings
+    final.write_videofile(
+        str(output_path),
+        codec="libx264",
+        audio_codec="aac",
+        threads=4,
+        preset="fast",
+        ffmpeg_params=["-crf", "22", "-movflags", "+faststart"]
+    )
+
+    return str(output_path)
 
 # def align_transcripts(base_words, medium_words, time_tolerance=0.5):
 #     """
@@ -141,11 +228,12 @@ def align_transcripts(base_words, medium_words, time_tolerance=0.6):
     return aligned
 
 
-def get_filler_timestamps_from_audio(audio_path: Path) -> list[dict]:
+def get_filler_timestamps_from_audio(audio_path: str) -> list[dict]:
     """
     Transcribes the audio using base and medium models, aligns timestamps,
     and returns filler word timestamps.
     """
+    audio_path = Path(audio_path)
     # Step 1: Transcribe with base and medium models
     base = transcribe_audio(audio_path, model_size="base")
     medium = transcribe_audio(audio_path, model_size="medium")
@@ -157,3 +245,39 @@ def get_filler_timestamps_from_audio(audio_path: Path) -> list[dict]:
     filler_times = get_filler_word_timestamps(aligned)
 
     return filler_times
+
+UPLOAD_DIR = Path("video")
+UPLOAD_DIR.mkdir(exist_ok=True)
+AUDIO_DIR = Path("audio")
+AUDIO_DIR.mkdir(exist_ok=True)
+
+def remove_filler_words(media_id: str):
+    try:
+        audio_path = AUDIO_DIR / f"{media_id}.wav"
+        video_path = find_video_file(media_id, UPLOAD_DIR)
+
+        if not audio_path.exists():
+            raise HTTPException(status_code=404, detail="Audio file not found")
+
+        filler_times = get_filler_timestamps_from_audio(str(audio_path))
+
+        cleaned_audio_path = remove_filler_words_from_audio(str(audio_path), filler_times)
+
+        response = {
+            "message": "Filler words removed successfully",
+            "cleaned_audio": cleaned_audio_path,
+            "filler_timestamps": filler_times,
+        }
+
+        # Optionally remove filler words from video
+        if video_path.exists():
+            cleaned_video_path = remove_filler_words_from_video(str(video_path), filler_times)
+            response["cleaned_video"] = cleaned_video_path
+
+        return JSONResponse(content=response)
+
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+
