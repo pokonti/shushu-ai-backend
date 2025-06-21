@@ -1,18 +1,29 @@
-import uuid
-import subprocess
 from pathlib import Path
+import uuid
 from fastapi import UploadFile
+import subprocess
 
-
-UPLOAD_DIR = Path("video")
-UPLOAD_DIR.mkdir(exist_ok=True)
 AUDIO_DIR = Path("audio")
+VIDEO_DIR = Path("video")
+
 AUDIO_DIR.mkdir(exist_ok=True)
+VIDEO_DIR.mkdir(exist_ok=True)
 
 def save_uploaded_file(file: UploadFile) -> dict:
-    file_ext = Path(file.filename).suffix
+    file_ext = Path(file.filename).suffix.lower()
     file_id = str(uuid.uuid4())
-    saved_path = UPLOAD_DIR / f"{file_id}{file_ext}"
+
+    audio_exts = {".mp3", ".wav", ".m4a", ".aac"}
+    video_exts = {".mp4", ".mov", ".mkv", ".avi", ".wmv"}
+
+    if file_ext in audio_exts:
+        save_dir = AUDIO_DIR
+    elif file_ext in video_exts:
+        save_dir = VIDEO_DIR
+    else:
+        raise ValueError(f"Unsupported file extension: {file_ext}")
+
+    saved_path = save_dir / f"{file_id}{file_ext}"
 
     with open(saved_path, "wb") as f:
         content = file.file.read()
@@ -21,7 +32,8 @@ def save_uploaded_file(file: UploadFile) -> dict:
     return {
         "file_id": file_id,
         "filename": saved_path.name,
-        "path": str(saved_path)
+        "path": str(saved_path),
+        "media_type": "audio" if file_ext in audio_exts else "video"
     }
 
 def extract_audio_from_video(video_path: str, audio_filename: str = None) -> str:
