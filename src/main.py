@@ -1,8 +1,13 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
+
+from src.database import Base, engine, get_db
+from typing import Annotated
+from sqlalchemy.orm import Session
 from src.video.router import router as video_router
 from src.preprocessing.router import router as preprocessing_router
 from fastapi.middleware.cors import CORSMiddleware
 from src.middleware.upload_limit import LimitUploadSizeMiddleware
+from src.auth.router import router as auth_router
 app = FastAPI()
 
 app.add_middleware(
@@ -13,5 +18,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(LimitUploadSizeMiddleware, max_upload_size=3 * 1024**3) # 3 GB
+
+# Base.metadata.drop_all(bind=engine)
+Base.metadata.create_all(bind=engine)
+
+db_dependency = Annotated[Session, Depends(get_db)]
+app.include_router(auth_router)
 app.include_router(video_router)
-app.include_router(preprocessing_router)
+# app.include_router(preprocessing_router)

@@ -13,7 +13,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
   backend:
-    build: src
+    build: .
     container_name: shushu-ai-app
     restart: always
     depends_on:

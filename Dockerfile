@@ -1,4 +1,4 @@
-FROM python:3.10-slim
+FROM python:3.11-slim
 
 RUN apt-get update && apt-get install -y \
     ffmpeg \
@@ -9,17 +9,12 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Set work directory
 WORKDIR /app
 
-# Install Python packages
-RUN pip install -r requirements.txt
-
-# Copy your application code
 COPY . .
 
-# Expose the port (if FastAPI is running on 8000)
+RUN pip install -r requirements.txt
+
 EXPOSE 8000
 
-# Start the FastAPI app
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

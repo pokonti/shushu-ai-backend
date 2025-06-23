@@ -8,7 +8,7 @@ from src.preprocessing.filler import get_filler_timestamps_from_audio, remove_fi
     remove_filler_words_from_video, remove_filler_words_smooth
 from src.preprocessing.service import find_video_file, transcribe_audio
 from src.summary.service import get_summary
-from src.video.service import save_uploaded_file, extract_audio_from_video
+from src.video.service import save_uploaded_file, extract_audio_from_video, replace_audio_in_video
 
 router = APIRouter(tags=["Basics"])
 
@@ -81,7 +81,7 @@ async def upload_video(file: UploadFile = File(...),
     if denoise:
         try:
             denoised_path = denoise_audio(audio_path)
-            response_data["audio_path"] = denoised_path
+            response_data["audio_path"] = replace_audio_in_video(file_info["path"], denoised_path)
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Denoise failed: {str(e)}")
 

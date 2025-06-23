@@ -9,7 +9,7 @@ def transcribe_audio(
     compute_type: str = "float32",
 ) -> dict:
     try:
-        model = WhisperModel(model_size, device = "cpu", compute_type=compute_type)
+        model = WhisperModel(model_size, compute_type=compute_type)
 
         segments, info = model.transcribe(file_path,
                                           initial_prompt="Transcribe everything exactly as spoken,"
