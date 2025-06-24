@@ -31,8 +31,10 @@ def transcribe_audio(
                         "end": round(word.end, 4),
                     })
                     words_print.append(word.word.strip())
+        full_text = " ".join(words_print)
+
         return {
-            "only_words": words_print,
+            "full_text": [full_text],
             "language": info.language,
             "language_probability": round(info.language_probability, 3),
             "words": words
