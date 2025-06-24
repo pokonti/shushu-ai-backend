@@ -1,14 +1,17 @@
+from fastapi import APIRouter, UploadFile, File, HTTPException, Query, Depends
+from fastapi.responses import JSONResponse
+from sqlalchemy.orm import Session
 from pathlib import Path
 
-from fastapi import APIRouter, UploadFile, File, HTTPException, Query
-from fastapi.responses import JSONResponse
-
+from src.auth.models import User
+from src.gcs.service import upload_video_to_gcs, upload_audio_to_gcs
+from src.media.models import Video, Audio
+from src.auth.service import get_current_user
+from src.database import get_db
 from src.preprocessing.denoiser import denoise_audio
-from src.preprocessing.filler import get_filler_timestamps_from_audio, remove_filler_words_from_audio, \
-    remove_filler_words_from_video, remove_filler_words_smooth
-from src.preprocessing.service import find_video_file, transcribe_audio
+from src.preprocessing.filler import get_filler_timestamps_from_audio, remove_filler_words_from_audio, remove_filler_words_smooth
 from src.summary.service import get_summary
-from src.video.service import save_uploaded_file, extract_audio_from_video, replace_audio_in_video
+from src.media.service import save_uploaded_file, extract_audio_from_video, replace_audio_in_video
 
 router = APIRouter(tags=["Basics"])
 
@@ -16,7 +19,9 @@ router = APIRouter(tags=["Basics"])
 async def upload_video(file: UploadFile = File(...),
                        denoise: bool = Query(False),
                        remove_fillers: bool = Query(False),
-                       summarize: bool = Query(False)
+                       summarize: bool = Query(False),
+                       db: Session = Depends(get_db),
+                       user: User = Depends(get_current_user)
                        ):
     if not file.filename.endswith((".mp3", ".wav")):
         raise HTTPException(status_code=400, detail="Unsupported file format")
@@ -54,13 +59,25 @@ async def upload_video(file: UploadFile = File(...),
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Summarization failed: {str(e)}")
 
+    public_url, gcs_uri = upload_audio_to_gcs(file, user.id)
+    response_data["public_url"] = public_url
+    response_data["gcs_uri"] = gcs_uri
+
+    audio = Audio(user_id=user.id, file_path=response_data["path"], gcs_uri=gcs_uri, public_url=public_url)
+    db.add(audio)
+    db.commit()
+    db.refresh(audio)
+
+    response_data["db"] = "saved"
     return JSONResponse(content=response_data)
 
 @router.post("/upload-video")
 async def upload_video(file: UploadFile = File(...),
                        denoise: bool = Query(False),
                        remove_fillers: bool = Query(False),
-                       summarize: bool = Query(False)
+                       summarize: bool = Query(False),
+                       db: Session = Depends(get_db),
+                       user: User = Depends(get_current_user)
                        ):
     if not file.filename.endswith((".mp4", ".mov", ".mkv")):
         raise HTTPException(status_code=400, detail="Unsupported file format")
@@ -107,5 +124,15 @@ async def upload_video(file: UploadFile = File(...),
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Summarization failed: {str(e)}")
 
+    public_url, gcs_uri = upload_video_to_gcs(file, user.id)
+    response_data["public_url"] = public_url
+    response_data["gcs_uri"] = gcs_uri
+
+    video = Video(user_id=user.id, file_path=response_data["path"], gcs_uri=gcs_uri, public_url=public_url)
+    db.add(video)
+    db.commit()
+    db.refresh(video)
+
+    response_data["db"]="saved"
     return JSONResponse(content=response_data)
 

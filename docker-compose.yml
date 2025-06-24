@@ -23,7 +23,7 @@ services:
     volumes:
       - .:/app
       - ./audio:/app/audio
-      - ./video:/app/video
+      - ./media:/app/media
     ports:
       - "8000:8000"
     command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload

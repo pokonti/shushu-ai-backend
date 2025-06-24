@@ -33,7 +33,7 @@ def save_uploaded_file(file: UploadFile) -> dict:
         "file_id": file_id,
         "filename": saved_path.name,
         "path": str(saved_path),
-        "media_type": "audio" if file_ext in audio_exts else "video"
+        "media_type": "audio" if file_ext in audio_exts else "media"
     }
 
 def extract_audio_from_video(video_path: str, audio_filename: str = None) -> str:
@@ -44,8 +44,8 @@ def extract_audio_from_video(video_path: str, audio_filename: str = None) -> str
     cmd = [
         "ffmpeg",
         "-y",                    # Overwrite existing
-        "-i", str(video_path),   # Input video
-        "-vn",                   # Disable video output
+        "-i", str(video_path),   # Input media
+        "-vn",                   # Disable media output
         "-acodec", "pcm_s16le",  # WAV codec
         "-ar", "16000",          # 16 kHz (Whisper-friendly)
         "-ac", "1",              # Mono

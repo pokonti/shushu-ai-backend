@@ -5,13 +5,13 @@ tools = [
         "type": "function",
         "function": {
             "name": "generate_short_clip",
-            "description": "Select a moment from a podcast/video to generate a short engaging clip for social media.",
+            "description": "Select a moment from a podcast/media to generate a short engaging clip for social media.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "media_id": {
                         "type": "string",
-                        "description": "Unique ID of the podcast or video file."
+                        "description": "Unique ID of the podcast or media file."
                     },
                     "language": {
                         "type": "string",

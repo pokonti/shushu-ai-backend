@@ -36,7 +36,7 @@ def remove_filler_words_from_audio(audio_path: str, filler_timestamps: list, out
 
 def remove_filler_words_from_video(video_path: str, filler_timestamps: list, output_path: str = None) -> str:
     """
-    Removes filler word segments from video based on timestamps.
+    Removes filler word segments from media based on timestamps.
     """
     video = VideoFileClip(video_path)
     segments = []
@@ -63,15 +63,15 @@ def remove_filler_words_smooth(video_path: str,
     Professional-grade filler word removal with proper CrossFadeIn transitions.
 
     Args:
-        video_path: Input video path
+        video_path: Input media path
         filler_timestamps: List of {'start':, 'end':} dicts
         output_path: Optional output path
         transition_duration: Crossfade duration (0.1-1.0 seconds)
 
     Returns:
-        Path to processed video
+        Path to processed media
     """
-    # Load video
+    # Load media
     video = VideoFileClip(video_path)
     clips = []
 
