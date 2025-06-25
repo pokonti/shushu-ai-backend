@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from pathlib import Path
 
 from src.auth.models import User
-from src.gcs.service import upload_video_to_gcs, upload_audio_to_gcs
+from src.gcs.service import upload_to_gcs
 from src.media.models import Video, Audio
 from src.auth.service import get_current_user
 from src.database import get_db
@@ -59,7 +59,7 @@ async def upload_video(file: UploadFile = File(...),
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Summarization failed: {str(e)}")
 
-    public_url, gcs_uri = upload_audio_to_gcs(file, user.id)
+    public_url, gcs_uri = upload_to_gcs(file, user.id)
     response_data["public_url"] = public_url
     response_data["gcs_uri"] = gcs_uri
 
@@ -124,7 +124,7 @@ async def upload_video(file: UploadFile = File(...),
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Summarization failed: {str(e)}")
 
-    public_url, gcs_uri = upload_video_to_gcs(file, user.id)
+    public_url, gcs_uri = upload_to_gcs(file, user.id, False)
     response_data["public_url"] = public_url
     response_data["gcs_uri"] = gcs_uri
 
@@ -135,4 +135,40 @@ async def upload_video(file: UploadFile = File(...),
 
     response_data["db"]="saved"
     return JSONResponse(content=response_data)
+
+@router.post("/update-processed-audio/{audio_id}")
+async def update_processed_audio(
+    audio_id: int,
+    processed_gcs_uri: str,
+    processed_public_url: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    """Update the Audio DB record with processed file info after Celery task completes."""
+    audio = db.query(Audio).filter(Audio.id == audio_id, Audio.user_id == user.id).first()
+    if not audio:
+        raise HTTPException(status_code=404, detail="Audio file not found")
+    audio.file_path = processed_public_url
+    audio.gcs_uri = processed_gcs_uri
+    db.commit()
+    db.refresh(audio)
+    return {"message": "Audio updated", "audio_id": audio_id}
+
+@router.post("/update-processed-video/{video_id}")
+async def update_processed_video(
+    video_id: int,
+    processed_gcs_uri: str,
+    processed_public_url: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    """Update the Video DB record with processed file info after Celery task completes."""
+    video = db.query(Video).filter(Video.id == video_id, Video.user_id == user.id).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="Video file not found")
+    video.file_path = processed_public_url
+    video.gcs_uri = processed_gcs_uri
+    db.commit()
+    db.refresh(video)
+    return {"message": "Video updated", "video_id": video_id}
 

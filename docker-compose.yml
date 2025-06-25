@@ -1,3 +1,4 @@
+version: "3.8"
 services:
   db:
     image: postgres:15
@@ -12,12 +13,19 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  redis:
+    image: redis:7-alpine
+    container_name: shushu-redis
+    ports:
+      - "6379:6379"
+
   backend:
     build: .
     container_name: shushu-ai-app
     restart: always
     depends_on:
       - db
+      - redis
     env_file:
       - .env
     volumes:
@@ -27,6 +35,23 @@ services:
     ports:
       - "8000:8000"
     command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+
+  worker:
+    build: .
+    container_name: shushu-celery-worker
+    restart: always
+    depends_on:
+      - redis
+      - db
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+      - ./audio:/app/audio
+      - ./media:/app/media
+    command: >
+      celery -A src.worker.celery_app worker
+      --loglevel=info
 
 volumes:
   postgres_data:
