@@ -7,6 +7,7 @@ from src.media.router import router as video_router
 from fastapi.middleware.cors import CORSMiddleware
 from src.middleware.upload_limit import LimitUploadSizeMiddleware
 from src.auth.router import router as auth_router
+from src.worker.router import router as worker_router
 app = FastAPI()
 
 app.add_middleware(
@@ -26,3 +27,5 @@ db_dependency = Annotated[Session, Depends(get_db)]
 app.include_router(auth_router)
 app.include_router(video_router)
 # app.include_router(preprocessing_router)
+
+app.include_router(worker_router)
