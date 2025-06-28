@@ -13,8 +13,12 @@ class Audio(Base):
     file_path = Column(String, nullable=False)
     uploaded_at = Column(DateTime, default=datetime.datetime.utcnow)
 
-    gcs_uri = Column(Text, nullable=False)
+    object_name = Column(Text, nullable=False)
     public_url = Column(Text, nullable=False)
+
+    status = Column(String, default="PENDING")  # PENDING, PROCESSING, COMPLETED, FAILED
+    summary = Column(String, nullable=True)
+    error_message = Column(String, nullable=True)
 
     user_id = Column(Integer, ForeignKey("users.id"))
     user = relationship("User", back_populates="audios")
@@ -27,8 +31,12 @@ class Video(Base):
     file_path = Column(String, nullable=False)
     uploaded_at = Column(DateTime, default=datetime.datetime.utcnow)
 
-    gcs_uri = Column(Text, nullable=False)
+    object_name = Column(Text, nullable=False)
     public_url = Column(Text, nullable=False)
+
+    status = Column(String, default="PENDING")  # PENDING, PROCESSING, COMPLETED, FAILED
+    summary = Column(String, nullable=True)
+    error_message = Column(String, nullable=True)
 
     user_id = Column(Integer, ForeignKey("users.id"))
     user = relationship("User", back_populates="videos")
