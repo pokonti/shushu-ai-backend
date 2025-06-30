@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, Body
+from fastapi import APIRouter, HTTPException, Depends, Body, Query
 from sqlalchemy.orm import Session
 from tempfile import TemporaryDirectory
 import os
@@ -12,6 +12,10 @@ from src.space.service import create_resigned_upload_url, download_file_from_spa
 from src.media.service import extract_audio_from_video, replace_audio_in_video
 from src.preprocessing.denoiser import process_audio_from_url
 from src.space.service import upload_processed_file_to_space
+from src.preprocessing.filler import remove_filler_words_from_audio, \
+    get_filler_timestamps_from_audio, remove_filler_words_smooth
+from src.summary.service import get_summary
+from src.worker.tasks import process_audio_task, process_video_task
 
 router = APIRouter(tags=["Processing"])
 
@@ -31,166 +35,6 @@ def generate_upload_url(filename: str, user: User = Depends(get_current_user)):
     return url_data
 
 
-
-
-# @router.post("/process-file")
-# async def process_file(
-#         object_name: str = Body(..., embed=True),
-#         options: dict = Body(..., embed=True),
-#         db: Session = Depends(get_db),
-#         user: User = Depends(get_current_user)
-# ):
-#     # This endpoint is now async because it calls our async cleanvoice function
-#     is_video = object_name.endswith((".mp4", ".mov", ".mkv"))
-#
-#     # Construct the public URL of the file you just uploaded to your Space
-#     original_public_url = f"https://{os.getenv('DO_SPACES_BUCKET_NAME')}.{os.getenv('DO_SPACES_REGION')}.cdn.digitaloceanspaces.com/{object_name}"
-#
-#     with TemporaryDirectory() as temp_dir:
-#         # --- Logic for Audio Files ---
-#         if not is_video:
-#             # 1. Process via Cleanvoice using the public URL
-#             cleaned_audio_url = await process_audio_from_url(original_public_url, options)
-#
-#             # 2. Download the final, cleaned audio file from Cleanvoice
-#             local_final_path = os.path.join(temp_dir, f"processed_{os.path.basename(object_name)}")
-#             async with httpx.AsyncClient() as client:
-#                 response = await client.get(cleaned_audio_url)
-#                 with open(local_final_path, 'wb') as f:
-#                     f.write(response.content)
-#
-#             final_file_to_upload = local_final_path
-#             summary = None  # Add summary logic if needed
-#
-#         # --- Logic for Video Files (More complex) ---
-#         else:
-#             # For video, you first need to extract the audio, upload IT to spaces,
-#             # then process IT, then recombine. This is more complex.
-#             # Let's focus on getting audio working first.
-#             # For now, we just pass through the video
-#             # Download the original video to pass it through
-#             download_file_from_space(object_name, os.path.join(temp_dir, "video.mp4"))
-#             final_file_to_upload = os.path.join(temp_dir, "video.mp4")
-#             summary = None
-#
-#         # 3. UPLOAD THE PROCESSED FILE BACK TO YOUR SPACES
-#         processed_object_name = object_name.replace("originals/", "processed/")
-#         upload_info = upload_processed_file_to_space(final_file_to_upload, processed_object_name)
-#
-#     # 4. SAVE THE FINAL RESULT TO THE DATABASE
-#     Model = Video if is_video else Audio
-#     record = Model(
-#         user_id=user.id,
-#         file_path=upload_info["public_url"],
-#         gcs_uri=upload_info["spaces_uri"],  # Rename this column later
-#         public_url=upload_info["public_url"],
-#         summary=summary
-#     )
-#
-#     db.add(record)
-#     db.commit()
-#     db.refresh(record)
-#
-#     return {
-#         "message": "Processing complete!",
-#         "result": {
-#             "public_url": record.public_url,
-#             "summary": record.summary
-#         }
-#     }
-
-
-
-
-# @router.post("/generate-upload-url")
-# def generate_upload_url(filename: str = Body(..., embed=True), user: User = Depends(get_current_user)):
-#     """ENDPOINT 1: The frontend calls this first to get permission to upload."""
-#     url_data = create_resigned_upload_url(user_id=user.id, file_name=filename)
-#     if not url_data:
-#         raise HTTPException(status_code=500, detail="Could not create upload URL")
-#     return url_data
-
-
-# @router.post("/process-file")
-# async def process_file(
-#         object_name: str = Body(..., embed=True),
-#         options: dict = Body(..., embed=True),
-#         db: Session = Depends(get_db),
-#         user: User = Depends(get_current_user)
-# ):
-#     """
-#     ENDPOINT 2: Frontend calls this after upload.
-#     WARNING: This endpoint is VERY SLOW and will time out on a real server.
-#              It is for local testing only. The logic here MUST be moved to a Celery worker.
-#     """
-#     is_video = object_name.endswith((".mp4", ".mov", ".mkv"))
-#     Model = Video if is_video else Audio
-#
-#     with TemporaryDirectory() as temp_dir:
-#         # --- Common Path for All Files: Where is the audio to process? ---
-#         audio_to_process_url = ""
-#         original_video_local_path = ""  # Needed for video to recombine later
-#
-#         if is_video:
-#             print("Processing video file...")
-#             # 1. Download the original video from Spaces
-#             original_video_local_path = os.path.join(temp_dir, os.path.basename(object_name))
-#             download_file_from_space(object_name, original_video_local_path)
-#
-#             # 2. Extract the audio from it
-#             extracted_audio_local_path = extract_audio_from_video(original_video_local_path)
-#
-#             # 3. CRITICAL STEP: Upload the extracted audio to Spaces to get a public URL
-#             audio_object_name = f"users/{user.id}/temp/{os.path.basename(extracted_audio_local_path)}"
-#             audio_upload_info = upload_processed_file_to_space(extracted_audio_local_path, audio_object_name)
-#             audio_to_process_url = audio_upload_info["public_url"]
-#             print(f"Temporarily uploaded extracted audio to: {audio_to_process_url}")
-#         else:
-#             print("Processing audio file...")
-#             # For audio files, the public URL is simple to construct
-#             audio_to_process_url = f"https://{os.getenv('DO_SPACES_BUCKET_NAME')}.{os.getenv('DO_SPACES_REGION')}.cdn.digitaloceanspaces.com/{object_name}"
-#
-#         # --- Universal Processing Step using Cleanvoice ---
-#         print("Sending audio to Cleanvoice for processing...")
-#         processed_audio_url_from_cleanvoice = await process_audio_from_url(audio_to_process_url, options)
-#
-#         # Download the final, cleaned audio file from Cleanvoice
-#         processed_audio_local_path = os.path.join(temp_dir, "final_processed_audio.wav")
-#         async with httpx.AsyncClient() as client:
-#             response = await client.get(processed_audio_url_from_cleanvoice)
-#             with open(processed_audio_local_path, 'wb') as f:
-#                 f.write(response.content)
-#         print(f"Downloaded processed audio to: {processed_audio_local_path}")
-#
-#         # --- Final Assembly and Upload ---
-#         final_file_to_upload_path = ""
-#         if is_video:
-#             # Recombine the processed audio with the original video
-#             print("Recombining processed audio with original video...")
-#             final_video_local_path = replace_audio_in_video(original_video_local_path, processed_audio_local_path)
-#             final_file_to_upload_path = final_video_local_path
-#         else:
-#             # For audio, the downloaded processed file is the final file
-#             final_file_to_upload_path = processed_audio_local_path
-#
-#         # UPLOAD THE PROCESSED FILE BACK TO YOUR SPACES
-#         processed_object_name = object_name.replace("originals/", "processed/")
-#         final_upload_info = upload_processed_file_to_space(final_file_to_upload_path, processed_object_name)
-#
-#     # SAVE THE FINAL RESULT TO THE DATABASE
-#     record = Model(
-#         user_id=user.id,
-#         file_path=final_upload_info["public_url"],
-#         object_name=final_upload_info["spaces_uri"],  # This should be renamed to 'object_name' or similar
-#         public_url=final_upload_info["public_url"],
-#     )
-#     db.add(record)
-#     db.commit()
-#
-#     return {
-#         "message": "Processing complete!",
-#         "result": {"public_url": final_upload_info["public_url"]}
-#     }
 @router.post("/process-audio")
 async def process_audio(
         object_name: str = Body(..., embed=True),
@@ -199,40 +43,80 @@ async def process_audio(
         user: User = Depends(get_current_user)
 ):
     """
-    Processes a pure audio file.
-    Workflow: Get Public URL -> Cleanvoice -> Download -> Upload Final -> Save DB.
+    Processes a pure audio file based on user-selected options.
+    This function now has a flexible pipeline.
     """
     with TemporaryDirectory() as temp_dir:
-        # 1. Construct the public URL of the original audio file in Spaces
-        original_public_url = f"https://{os.getenv('DO_SPACES_BUCKET_NAME')}.{os.getenv('DO_SPACES_REGION')}.cdn.digitaloceanspaces.com/{object_name}"
+        # --- Stage 1: Initial Setup ---
+        # Download the original file from Spaces. This is our starting point.
+        local_original_path = os.path.join(temp_dir, os.path.basename(object_name))
+        download_file_from_space(object_name, local_original_path)
 
-        # 2. Process via Cleanvoice using the public URL
-        print(f"Sending audio {original_public_url} to Cleanvoice...")
-        processed_audio_url = await process_audio_from_url(original_public_url, options)
+        # This variable will hold the path to the most recently processed version of the file.
+        current_file_path = local_original_path
 
-        # 3. Download the final, cleaned audio file from Cleanvoice
-        local_final_path = os.path.join(temp_dir, f"processed_{os.path.basename(object_name)}")
-        async with httpx.AsyncClient() as client:
-            response = await client.get(processed_audio_url)
-            with open(local_final_path, 'wb') as f:
-                f.write(response.content)
+        # --- Stage 2: Conditional Denoising (Cleanvoice) ---
+        if options.get("denoise"):
+            print("Denoise option selected. Processing with Cleanvoice...")
+            # To process with Cleanvoice, we need a public URL of the ORIGINAL file.
+            original_public_url = f"https://{os.getenv('DO_SPACES_BUCKET_NAME')}.{os.getenv('DO_SPACES_REGION')}.cdn.digitaloceanspaces.com/{object_name}"
 
-        # 4. Upload the processed file back to your Spaces
+            processed_audio_url = await process_audio_from_url(original_public_url, options)
+
+            # Download the result from Cleanvoice. This becomes our new "current" file.
+            denoised_local_path = os.path.join(temp_dir, "audio_denoised.wav")
+            async with httpx.AsyncClient() as client:
+                response = await client.get(processed_audio_url)
+                with open(denoised_local_path, 'wb') as f:
+                    f.write(response.content)
+
+            current_file_path = denoised_local_path  # CRUCIAL: Update the working path
+            print(f"Denoising complete. New working file: {current_file_path}")
+
+        # --- Stage 3: Conditional Filler Word Removal (Local) ---
+        if options.get("removeFillers"):
+            print(f"Remove Fillers option selected. Processing file: {current_file_path}...")
+            # This function runs on the output of the previous step.
+            cleaned_local_path = remove_filler_words_from_audio(current_file_path)
+
+            current_file_path = cleaned_local_path  # CRUCIAL: Update the working path again
+            print(f"Filler word removal complete. New working file: {current_file_path}")
+        else:
+            print("Remove Fillers option not selected. Skipping.")
+
+        # --- Stage 4: Conditional Summarization (Local) ---
+        summary_text = None
+        if options.get("summarize"):
+            print(f"Summarize option selected. Analyzing file: {current_file_path}...")
+            # Summarization runs on the final version of the audio.
+            summary_text = get_summary(current_file_path)  # Assumes this function exists
+            print("Summarization complete.")
+        else:
+            print("Summarize option not selected. Skipping.")
+
+        # --- Stage 5: Final Upload ---
+        # Upload the final version of the file, whatever it may be.
+        print(f"Uploading final processed file '{current_file_path}' to Spaces...")
         processed_object_name = object_name.replace("originals/", "processed/")
-        final_upload_info = upload_processed_file_to_space(local_final_path, processed_object_name)
+        final_upload_info = upload_processed_file_to_space(current_file_path, processed_object_name)
 
-    # 5. Save the final result to the database
+    # --- Stage 6: Save to Database ---
     record = Audio(
         user_id=user.id,
         file_path=final_upload_info["public_url"],
         object_name=final_upload_info["spaces_uri"],
         public_url=final_upload_info["public_url"],
+        summary=summary_text  # Save the summary to the DB
     )
     db.add(record)
     db.commit()
+    db.refresh(record)
 
-    return {"message": "Audio processing complete!", "result": {"public_url": final_upload_info["public_url"]}}
-
+    return {
+        "message": "Processing complete!",
+        "public_url": record.public_url,
+        "summary": record.summary
+    }
 
 @router.post("/process-video")
 async def process_video(
@@ -242,48 +126,189 @@ async def process_video(
         user: User = Depends(get_current_user)
 ):
     """
-    Processes a video file.
-    Workflow: Download Video -> Extract Audio -> Upload Temp Audio -> Cleanvoice ->
-              Download Processed Audio -> Recombine with Video -> Upload Final Video -> Save DB.
+    Processes a video file based on user-selected options for its audio track.
+    Workflow: Download Video -> Extract Audio -> [Conditional Audio Processing Pipeline] ->
+              Recombine Audio/Video -> Upload Final Video -> Save DB.
     """
     with TemporaryDirectory() as temp_dir:
-        # 1. Download original video from Spaces
+        # --- Stage 1: Initial Setup ---
+        # 1. Download the original video file from Spaces.
         original_video_local_path = os.path.join(temp_dir, os.path.basename(object_name))
+        print(f"Downloading original video: {object_name}...")
         download_file_from_space(object_name, original_video_local_path)
 
-        # 2. Extract its audio
+        # 2. Extract the audio track from the video.
+        print("Extracting audio from video...")
         extracted_audio_local_path = extract_audio_from_video(original_video_local_path)
 
-        # 3. Upload extracted audio to Spaces to get a temporary public URL
-        temp_audio_object_name = f"users/{user.id}/temp/{os.path.basename(extracted_audio_local_path)}"
-        temp_audio_info = upload_processed_file_to_space(extracted_audio_local_path, temp_audio_object_name)
+        # This variable will track the latest version of the audio file through the pipeline.
+        current_audio_path = extracted_audio_local_path
+        current_video_path = original_video_local_path
 
-        # 4. Process the temporary audio's URL via Cleanvoice
-        print(f"Sending extracted audio {temp_audio_info['public_url']} to Cleanvoice...")
-        processed_audio_url = await process_audio_from_url(temp_audio_info['public_url'], options)
+        # --- Stage 2: Conditional Denoising on the Extracted Audio ---
+        if options.get("denoise"):
+            print("Denoise option selected. Processing extracted audio with Cleanvoice...")
 
-        # 5. Download the final, cleaned audio from Cleanvoice
-        processed_audio_local_path = os.path.join(temp_dir, "final_processed_audio.wav")
-        async with httpx.AsyncClient() as client:
-            response = await client.get(processed_audio_url)
-            with open(processed_audio_local_path, 'wb') as f:
-                f.write(response.content)
+            # To use Cleanvoice, the extracted audio needs its own temporary public URL.
+            temp_audio_object_name = f"users/{user.id}/temp/{os.path.basename(extracted_audio_local_path)}"
+            temp_audio_info = upload_processed_file_to_space(extracted_audio_local_path, temp_audio_object_name)
 
-        # 6. Recombine the processed audio with the original video
-        final_video_local_path = replace_audio_in_video(original_video_local_path, processed_audio_local_path)
+            # Call Cleanvoice with the temporary URL.
+            processed_audio_url = await process_audio_from_url(temp_audio_info['public_url'], options)
 
-        # 7. Upload the final processed video back to your Spaces
+            # Download the result from Cleanvoice. This becomes our new working audio file.
+            denoised_local_path = os.path.join(temp_dir, "audio_denoised.wav")
+            async with httpx.AsyncClient() as client:
+                response = await client.get(processed_audio_url)
+                with open(denoised_local_path, 'wb') as f:
+                    f.write(response.content)
+
+            current_audio_path = denoised_local_path
+            current_video_path = replace_audio_in_video(original_video_local_path, current_audio_path)
+            print(f"Denoising complete. New working audio: {current_audio_path}")
+
+        # --- Stage 3: Conditional Filler Word Removal ---
+        if options.get("removeFillers"):
+            print(f"Remove Fillers option selected. Processing audio: {current_audio_path}...")
+
+            filler_times = get_filler_timestamps_from_audio(current_audio_path)
+            # current_audio_path = remove_filler_words_from_audio(current_audio_path, filler_times)
+            #
+            # current_video_path = remove_filler_words_smooth(current_video_path, filler_times)
+
+            current_video_path = remove_filler_words_smooth(current_video_path, filler_times)
+            current_audio_path = extract_audio_from_video(current_video_path)
+
+
+
+            print(f"Filler word removal complete. New working audio: {current_audio_path}")
+        else:
+            print("Remove Fillers option not selected. Skipping.")
+
+        # --- Stage 4: Conditional Summarization ---
+        summary_text = None
+        if options.get("summarize"):
+            print(f"Summarize option selected. Analyzing audio: {current_audio_path}...")
+            # Summarization runs on the final version of the audio.
+            summary_text = get_summary(current_audio_path)
+            print("Summarization complete.")
+        else:
+            print("Summarize option not selected. Skipping.")
+
+        # --- Stage 5: Recombine and Final Upload ---
+        # Recombine the final processed audio with the original video.
+        print(f"Recombining final audio ('{os.path.basename(current_audio_path)}') with original video...")
+        final_video_local_path = replace_audio_in_video(current_video_path, current_audio_path)
+        # Upload the final video file to Spaces.
+        print(f"Uploading final processed video '{os.path.basename(final_video_local_path)}' to Spaces...")
         processed_object_name = object_name.replace("originals/", "processed/")
         final_upload_info = upload_processed_file_to_space(final_video_local_path, processed_object_name)
 
-    # 8. Save the final result to the database
+    # --- Stage 6: Save to Database ---
     record = Video(
         user_id=user.id,
         file_path=final_upload_info["public_url"],
         object_name=final_upload_info["spaces_uri"],
         public_url=final_upload_info["public_url"],
+        summary=summary_text
     )
     db.add(record)
     db.commit()
+    db.refresh(record)
 
-    return {"message": "Video processing complete!", "result": {"public_url": final_upload_info["public_url"]}}
+    return {
+        "message": "Video processing complete!",
+        "public_url": record.public_url,
+        "summary": record.summary
+    }
+
+
+@router.post("/start-processing")
+def start_processing(
+        object_name: str = Body(..., embed=True),
+        options: dict = Body(..., embed=True),
+        db: Session = Depends(get_db),
+        user: User = Depends(get_current_user)
+):
+    """
+    Starts a background processing job for an uploaded file.
+
+    This endpoint is designed to be extremely fast. It does three things:
+    1. Determines if the file is an audio or video file.
+    2. Creates a new record in the appropriate database table with a 'PENDING' status.
+       This record acts as the "job ticket".
+    3. Dispatches the job to the correct Celery worker, passing the ID of the new record.
+    4. Immediately returns the new 'job_id' to the frontend.
+    """
+    # Step 1: Determine the file type and corresponding database model.
+    is_video = object_name.lower().endswith((".mp4", ".mov", ".mkv"))
+    Model = Video if is_video else Audio
+
+    # Step 2: Create the "job ticket" record in the database.
+    # The 'status' field defaults to 'PENDING' as defined in your model.
+    record = Model(
+        user_id=user.id,
+        file_path=object_name,  # Path to the original file in Spaces
+        object_name=object_name,  # Store the object name as well
+        status="PENDING",  # Explicitly set the initial status
+    )
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+
+    print(f"Created new job record with ID: {record.id} for user {user.id}")
+
+    # Step 3: Prepare arguments and dispatch the job to the correct Celery worker.
+    task_args = {
+        "job_id": record.id,
+        "object_name": object_name,
+        "options": options,
+        "user_id": user.id
+    }
+
+    if is_video:
+        print(f"Dispatching job {record.id} to video processing task...")
+        process_video_task.delay(**task_args)
+    else:
+        print(f"Dispatching job {record.id} to audio processing task...")
+        process_audio_task.delay(**task_args)
+
+    # Step 4: Return the job ID immediately to the frontend.
+    # The frontend will now use this ID to poll the /jobs/{job_id}/status endpoint.
+    return {
+        "message": "Processing has been successfully started.",
+        "job_id": record.id
+    }
+
+
+@router.get("/jobs/{job_id}/status")
+def get_job_status(
+    job_id: int,
+    media_type: str = Query(..., description="Specify 'audio' or 'video' to search the correct table.", enum=["video", "audio"]),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    """
+    Frontend calls this third, and repeatedly (polls), to check the job's progress.
+    This endpoint is a simple, fast, read-only window into the database.
+    """
+    # 1. Determine which database table to query based on the media_type parameter.
+    Model = Video if media_type == "video" else Audio
+
+    # 2. Perform the database query.
+    # It finds the record by its ID AND ensures it belongs to the logged-in user.
+    record = db.query(Model).filter(Model.id == job_id, Model.user_id == user.id).first()
+
+    # 3. Handle the case where the job doesn't exist or doesn't belong to the user.
+    if not record:
+        raise HTTPException(status_code=404, detail="Job not found or you do not have permission to view it.")
+
+    # 4. Return the relevant information from the database record.
+    # The frontend can use this data to update the UI.
+    return {
+        "job_id": record.id,
+        "status": record.status,           # e.g., "PENDING", "PROCESSING", "COMPLETED", "FAILED"
+        "public_url": record.public_url, # Will be null until the job is 'COMPLETED'
+        "summary": record.summary,         # Will be null until the job is 'COMPLETED'
+        "error": record.error_message    # Will be populated if the status is 'FAILED'
+    }

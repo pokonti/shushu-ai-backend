@@ -3,7 +3,6 @@ from moviepy import VideoFileClip, concatenate_videoclips, CompositeVideoClip
 from moviepy.video.fx  import CrossFadeIn
 from moviepy.audio.fx import AudioFadeIn
 from pathlib import Path
-from typing import List
 from faster_whisper import WhisperModel
 
 def transcribe_audio(
@@ -16,7 +15,7 @@ def transcribe_audio(
 
         segments, info = model.transcribe(file_path,
                                           initial_prompt="Transcribe everything exactly as spoken,"
-                                                         "including ums and uhs, and all filler words",
+                                                         "including ums and uhs, and absolutely all filler words",
                                           vad_filter=False,
                                           suppress_tokens=[],
                                           beam_size=5,
@@ -50,10 +49,27 @@ def transcribe_audio(
             "words": []
         }
 
+def get_filler_timestamps_from_audio(audio_path: str) -> list[dict]:
+    """
+    Transcribes the audio using base and medium models, aligns timestamps,
+    and returns filler word timestamps.
+    """
+    audio_path = Path(audio_path)
+    # Step 1: Transcribe with base and medium models
+    base = transcribe_audio(audio_path, model_size="base")
+    medium = transcribe_audio(audio_path, model_size="medium")
+
+    # Step 2: Align timestamps
+    aligned = align_transcripts(base["words"], medium["words"])
+
+    # Step 3: Extract filler word timestamps
+    filler_times = get_filler_word_timestamps(aligned)
+
+    return filler_times
 
 
 def get_filler_word_timestamps(words: list) -> list:
-    FILLER_WORDS = {"um", "uh", "like", "so", "actually", "basically", "yeah"}
+    FILLER_WORDS = {"um", "uh", "like", "yeah", "er", "ah", "basically", "mm", "aa"}
 
     return [
         {"start": word["start"], "end": word["end"]}
@@ -61,10 +77,59 @@ def get_filler_word_timestamps(words: list) -> list:
         if word["word"].lower() in FILLER_WORDS
     ]
 
-def remove_filler_words_from_audio(audio_path: str, filler_timestamps: list, output_path: str = None) -> str:
+def align_transcripts(base_words, medium_words, time_tolerance=0.5):
+    """
+    Aligns word timestamps from base and medium Whisper model outputs.
+
+    For matching words (case-insensitive), replaces base timestamps with medium’s if within time tolerance.
+    Keeps fillers from base even if unmatched.
+
+    Returns:
+        List of {'word', 'start', 'end'} with best available timestamps.
+    """
+    aligned = []
+    used_indices = set()
+
+    for bw in base_words:
+        word = bw["word"].lower()
+        best_match = None
+        best_diff = float("inf")
+
+        for idx, mw in enumerate(medium_words):
+            if idx in used_indices:
+                continue
+            if mw["word"].lower() != word:
+                continue
+
+            # Match found — check time proximity
+            time_diff = abs(bw["start"] - mw["start"])
+            if time_diff < best_diff and time_diff <= time_tolerance:
+                best_diff = time_diff
+                best_match = (idx, mw)
+
+        if best_match:
+            idx, mw = best_match
+            used_indices.add(idx)
+            aligned.append({
+                "word": word,
+                "start": mw["start"],
+                "end": mw["end"]
+            })
+        else:
+            # No match or out of sync — keep original
+            aligned.append(bw)
+
+    return aligned
+
+
+
+def remove_filler_words_from_audio(audio_path: str, filler_timestamps: list = None,  output_path: str = None) -> str:
     """
     Removes filler word segments from audio based on their start and end times.
     """
+    if filler_timestamps is None:
+        filler_timestamps = get_filler_timestamps_from_audio(audio_path)
+
     audio = AudioSegment.from_file(audio_path)
     cleaned_audio = AudioSegment.empty()
 
@@ -75,7 +140,7 @@ def remove_filler_words_from_audio(audio_path: str, filler_timestamps: list, out
 
     cleaned_audio += audio[prev_end * 1000:]
 
-    output_path = output_path or Path(audio_path).with_name(Path(audio_path).stem + "_cleaned.wav")
+    output_path = output_path or Path(audio_path).with_name(Path(audio_path).stem + "_no_filler.wav")
     cleaned_audio.export(output_path, format="wav")
     return str(output_path)
 
@@ -84,6 +149,7 @@ def remove_filler_words_from_video(video_path: str, filler_timestamps: list, out
     """
     Removes filler word segments from media based on timestamps.
     """
+
     video = VideoFileClip(video_path)
     segments = []
 
@@ -97,14 +163,14 @@ def remove_filler_words_from_video(video_path: str, filler_timestamps: list, out
         segments.append(video.subclipped(prev_end, video.duration))
 
     final = concatenate_videoclips(segments)
-    output_path = output_path or Path(video_path).with_name(Path(video_path).stem + "_cleaned.mp4")
+    output_path = output_path or Path(video_path).with_name(Path(video_path).stem + "_no_filler.mp4")
     final.write_videofile(str(output_path), codec="libx264", audio_codec="aac")
     return str(output_path)
 
 def remove_filler_words_smooth(video_path: str,
-                            filler_timestamps: List[dict],
+                            filler_timestamps: list,
                             output_path: str = None,
-                            transition_duration: float = 0.3) -> str:
+                            transition_duration: float = 0.15) -> str:
     """
     Professional-grade filler word removal with proper CrossFadeIn transitions.
 
@@ -162,7 +228,7 @@ def remove_filler_words_smooth(video_path: str,
     )
 
     output_path = output_path or Path(video_path).with_name(
-        f"{Path(video_path).stem}_pro_clean.mp4"
+        f"{Path(video_path).stem}_pro_filler.mp4"
     )
 
     final.write_videofile(
@@ -175,104 +241,3 @@ def remove_filler_words_smooth(video_path: str,
     )
 
     return str(output_path)
-
-# def align_transcripts(base_words, medium_words, time_tolerance=0.5):
-#     """
-#     Aligns word timestamps from base and medium Whisper model outputs.
-#
-#     - base_words: list of {'word', 'start', 'end'} with fillers, less accurate timestamps
-#     - medium_words: list of {'word', 'start', 'end'} with precise timestamps, no fillers
-#     - time_tolerance: max time difference in seconds allowed when matching words
-#
-#     Returns:
-#         list of {'word', 'start', 'end'} — using base words and medium timestamps where possible
-#     """
-#     aligned = []
-#     j = 0  # index for medium_words
-#
-#     for bw in base_words:
-#         word = bw["word"].lower()
-#
-#         # Try to match with medium_words
-#         while j < len(medium_words):
-#             mw = medium_words[j]
-#             j += 1
-#
-#             if mw["word"].lower() == word:
-#                 # Match found → take timestamps from medium
-#                 aligned.append({
-#                     "word": word,
-#                     "start": mw["start"],
-#                     "end": mw["end"]
-#                 })
-#                 break
-#         else:
-#             # No match → use base model timestamps (likely a filler word)
-#             aligned.append({
-#                 "word": word,
-#                 "start": bw["start"],
-#                 "end": bw["end"]
-#             })
-#
-#     return aligned
-def align_transcripts(base_words, medium_words, time_tolerance=0.5):
-    """
-    Aligns word timestamps from base and medium Whisper model outputs.
-
-    For matching words (case-insensitive), replaces base timestamps with medium’s if within time tolerance.
-    Keeps fillers from base even if unmatched.
-
-    Returns:
-        List of {'word', 'start', 'end'} with best available timestamps.
-    """
-    aligned = []
-    used_indices = set()
-
-    for bw in base_words:
-        word = bw["word"].lower()
-        best_match = None
-        best_diff = float("inf")
-
-        for idx, mw in enumerate(medium_words):
-            if idx in used_indices:
-                continue
-            if mw["word"].lower() != word:
-                continue
-
-            # Match found — check time proximity
-            time_diff = abs(bw["start"] - mw["start"])
-            if time_diff < best_diff and time_diff <= time_tolerance:
-                best_diff = time_diff
-                best_match = (idx, mw)
-
-        if best_match:
-            idx, mw = best_match
-            used_indices.add(idx)
-            aligned.append({
-                "word": word,
-                "start": mw["start"],
-                "end": mw["end"]
-            })
-        else:
-            # No match or out of sync — keep original
-            aligned.append(bw)
-
-    return aligned
-
-def get_filler_timestamps_from_audio(audio_path: str) -> list[dict]:
-    """
-    Transcribes the audio using base and medium models, aligns timestamps,
-    and returns filler word timestamps.
-    """
-    audio_path = Path(audio_path)
-    # Step 1: Transcribe with base and medium models
-    base = transcribe_audio(audio_path, model_size="base")
-    medium = transcribe_audio(audio_path, model_size="medium")
-
-    # Step 2: Align timestamps
-    aligned = align_transcripts(base["words"], medium["words"])
-
-    # Step 3: Extract filler word timestamps
-    filler_times = get_filler_word_timestamps(aligned)
-
-    return filler_times

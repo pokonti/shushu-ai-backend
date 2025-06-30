@@ -4,13 +4,13 @@ from botocore.exceptions import ClientError
 from datetime import datetime
 from dotenv import load_dotenv
 load_dotenv()
-# Get environment variables with validation
+
 DO_SPACES_REGION = os.getenv('DO_SPACES_REGION')
 DO_SPACES_BUCKET_NAME = os.getenv('DO_SPACES_BUCKET_NAME')
 DO_SPACES_ACCESS_KEY = os.getenv('DO_SPACES_ACCESS_KEY')
 DO_SPACES_SECRET_KEY = os.getenv('DO_SPACES_SECRET_KEY')
 
-# Validate required environment variables
+
 if not all([DO_SPACES_REGION, DO_SPACES_BUCKET_NAME, DO_SPACES_ACCESS_KEY, DO_SPACES_SECRET_KEY]):
     raise ValueError("Missing required DigitalOcean Spaces environment variables")
 
@@ -65,7 +65,6 @@ def upload_processed_file_to_space(local_path: str, object_name: str) -> dict:
     permanent, public CDN URL.
     """
     try:
-        # Upload the file and make it publicly readable
         s3_client.upload_file(
             local_path,
             DO_SPACES_BUCKET_NAME,
@@ -73,7 +72,6 @@ def upload_processed_file_to_space(local_path: str, object_name: str) -> dict:
             ExtraArgs={'ACL': 'public-read'}
         )
 
-        # Manually construct the permanent, fast, public CDN URL. No presigning needed.
         public_url = f"https://{DO_SPACES_BUCKET_NAME}.{DO_SPACES_REGION}.cdn.digitaloceanspaces.com/{object_name}"
 
         return {"public_url": public_url, "spaces_uri": object_name}
@@ -81,6 +79,19 @@ def upload_processed_file_to_space(local_path: str, object_name: str) -> dict:
         print(f"Error uploading processed file: {e}")
         raise
 
-# if __name__ == "__main__":
-#     print("Testing s3_client...")
-#     print(s3_client.list_buckets())
+def delete_file_from_space(object_name: str):
+    """
+    Deletes a file from the DigitalOcean Space.
+    Args:
+        object_name (str): The name (key) of the file to delete.
+    """
+    try:
+        print(f"Attempting to delete {object_name} from Space...")
+        s3_client.delete_object(Bucket=DO_SPACES_BUCKET_NAME, Key=object_name)
+        print(f"Successfully deleted {object_name} from Space.")
+        return True
+    except ClientError as e:
+        print(f"Error deleting file {object_name} from Space: {e}")
+        # Depending on your needs, you might want to raise the exception
+        # or just return False. For a cleanup task, logging and returning False is often enough.
+        return False

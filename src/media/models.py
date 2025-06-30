@@ -14,7 +14,7 @@ class Audio(Base):
     uploaded_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     object_name = Column(Text, nullable=False)
-    public_url = Column(Text, nullable=False)
+    public_url = Column(Text, nullable=True)
 
     status = Column(String, default="PENDING")  # PENDING, PROCESSING, COMPLETED, FAILED
     summary = Column(String, nullable=True)
@@ -32,7 +32,7 @@ class Video(Base):
     uploaded_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     object_name = Column(Text, nullable=False)
-    public_url = Column(Text, nullable=False)
+    public_url = Column(Text, nullable=True)
 
     status = Column(String, default="PENDING")  # PENDING, PROCESSING, COMPLETED, FAILED
     summary = Column(String, nullable=True)

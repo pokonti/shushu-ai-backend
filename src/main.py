@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends
 from src.database import Base, engine, get_db
 from typing import Annotated
 from sqlalchemy.orm import Session
-from src.media.router import router as video_router
+
 from fastapi.middleware.cors import CORSMiddleware
 from src.auth.router import router as auth_router
 from src.worker.router import router as worker_router
@@ -18,12 +18,12 @@ app.add_middleware(
 )
 
 # Base.metadata.drop_all(bind=engine)
-# Base.metadata.drop_all(bind=engine, checkfirst=True)
+Base.metadata.drop_all(bind=engine, checkfirst=True)
 Base.metadata.create_all(bind=engine)
 
 db_dependency = Annotated[Session, Depends(get_db)]
 app.include_router(auth_router)
-app.include_router(video_router)
+
 # app.include_router(preprocessing_router)
 
 app.include_router(worker_router)
