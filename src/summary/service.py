@@ -1,5 +1,5 @@
 from pathlib import Path
-from src.preprocessing.service import transcribe_audio
+from src.preprocessing.filler import transcribe_audio
 from google import genai
 from dotenv import load_dotenv
 import os

@@ -1,7 +1,12 @@
 from dotenv import load_dotenv
+from pydub import AudioSegment
+import noisereduce as nr
+import numpy as np
+from pathlib import Path
 import os
 import httpx
 import asyncio
+
 
 load_dotenv()
 
@@ -96,3 +101,17 @@ async def process_audio_from_url(public_audio_url: str, options: dict) -> str:
             await asyncio.sleep(10)
 
         raise Exception(f"Cleanvoice job timed out after {max_polls * 10 / 60} minutes.")
+
+
+async def main():
+    audio_url = "https://shushu-space.fra1.digitaloceanspaces.com/users/1/originals/20250627102852_4be188a6-0448-494d-b3fb-87a9d13cd74e.wav"
+    options = {"denoise": True, "remove_fillers": False}
+    try:
+        processed_url = await process_audio_from_url(audio_url, options)
+        print(f"\nSuccessfully processed audio. You can download it from: {processed_url}")
+    except Exception as e:
+        print(f"\nAn error occurred: {e}")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

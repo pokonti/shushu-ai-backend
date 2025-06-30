@@ -44,4 +44,9 @@ Thumbs.db
 # Project specific
 video/
 audio/
-*.log 
+*.log
+
+test
+
+
+
