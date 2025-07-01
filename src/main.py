@@ -9,10 +9,15 @@ from src.worker.router import router as worker_router
 from src.space.router import router as space_router
 app = FastAPI()
 
+origins = [
+    "https://landing-demo-nine.vercel.app",
+    "http://localhost:5173",
+
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173",
-                   "https://landing-demo-nine.vercel.app"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
