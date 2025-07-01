@@ -10,6 +10,8 @@ from src.space.router import router as space_router
 app = FastAPI()
 
 origins = [
+    "https://shushu.cam",
+    "https://www.shushu.cam",
     "https://landing-demo-nine.vercel.app",
     "http://localhost:5173",
 
