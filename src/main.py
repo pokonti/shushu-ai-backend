@@ -25,8 +25,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Base.metadata.drop_all(bind=engine)
 # Base.metadata.drop_all(bind=engine, checkfirst=True)
-
 Base.metadata.create_all(bind=engine)
 
 db_dependency = Annotated[Session, Depends(get_db)]
