@@ -131,10 +131,14 @@ async def _process_video_async(job_id: int, object_name: str, options: dict, use
 
             # 2. Extract the audio track from the video.
             print("Extracting audio from video...")
-            extracted_audio_local_path = extract_audio_from_video(original_video_local_path)
+            # The 'temp_dir' is passed as the output directory.
+            extracted_audio_path = extract_audio_from_video(
+                video_path_str=original_video_local_path,
+                output_dir_str=temp_dir
+            )
 
             # This variable will track the latest version of the audio file through the pipeline.
-            current_audio_path = extracted_audio_local_path
+            current_audio_path = extracted_audio_path
             current_video_path = original_video_local_path
 
             # --- Stage 2: Conditional Denoising on the Extracted Audio ---
@@ -142,8 +146,8 @@ async def _process_video_async(job_id: int, object_name: str, options: dict, use
                 print("Denoise option selected. Processing extracted audio with Cleanvoice...")
 
                 # To use Cleanvoice, the extracted audio needs its own temporary public URL.
-                temp_audio_object_name = f"users/{user_id}/temp/{os.path.basename(extracted_audio_local_path)}"
-                temp_audio_info = upload_processed_file_to_space(extracted_audio_local_path, temp_audio_object_name)
+                temp_audio_object_name = f"users/{user_id}/temp/{os.path.basename(extracted_audio_path)}"
+                temp_audio_info = upload_processed_file_to_space(extracted_audio_path, temp_audio_object_name)
 
                 # Call Cleanvoice with the temporary URL.
                 processed_audio_url = await process_audio_from_url(temp_audio_info['public_url'], options)
@@ -156,7 +160,11 @@ async def _process_video_async(job_id: int, object_name: str, options: dict, use
                         f.write(response.content)
 
                 current_audio_path = denoised_local_path
-                current_video_path = replace_audio_in_video(original_video_local_path, current_audio_path)
+                current_video_path = replace_audio_in_video(
+                    video_path_str=original_video_local_path,
+                    new_audio_path_str=current_audio_path,
+                    output_dir_str=temp_dir
+                )
                 print(f"Denoising complete. New working audio: {current_audio_path}")
 
             # --- Stage 3: Conditional Filler Word Removal ---
@@ -166,11 +174,13 @@ async def _process_video_async(job_id: int, object_name: str, options: dict, use
                 filler_times = get_filler_timestamps_from_audio(current_audio_path)
 
                 current_video_path = remove_filler_words_smooth(current_video_path, filler_times)
-                current_audio_path = extract_audio_from_video(current_video_path)
+
+                current_audio_path = extract_audio_from_video(
+                    video_path_str=current_video_path,
+                    output_dir_str=temp_dir
+                )
 
                 print(f"Filler word removal complete. New working audio: {current_audio_path}")
-            else:
-                print("Remove Fillers option not selected. Skipping.")
 
             # --- Stage 4: Conditional Summarization ---
             summary_text = None
@@ -198,7 +208,6 @@ async def _process_video_async(job_id: int, object_name: str, options: dict, use
         db.add(record)
         db.commit()
         db.refresh(record)
-        # ... update record ...
         db.commit()
 
     except Exception as e:

@@ -149,7 +149,51 @@ def remove_filler_words_from_video(video_path: str, filler_timestamps: list, out
     """
     Removes filler word segments from media based on timestamps.
     """
+    video = None
+    final_clip = None
+    try:
+        # Load the main video file
+        video = VideoFileClip(video_path)
+        segments = []
 
+        # Create the list of subclips to keep
+        prev_end = 0
+        for filler in filler_timestamps:
+            if filler["start"] > prev_end:
+                segments.append(video.subclip(prev_end, filler["start"]))
+            prev_end = filler["end"]
+
+        # Add the final segment after the last filler word
+        if prev_end < video.duration:
+            segments.append(video.subclip(prev_end, video.duration))
+
+        # If there are segments to concatenate, do so
+        if segments:
+            final_clip = concatenate_videoclips(segments)
+
+            # Determine the output path
+            if not output_path:
+                output_path = Path(video_path).with_name(Path(video_path).stem + "_no_filler.mp4")
+
+            # Write the final video to a file
+            final_clip.write_videofile(str(output_path), codec="libx264", audio_codec="aac")
+
+            return str(output_path)
+        else:
+            # If no segments were created (e.g., the whole video was a filler),
+            # return the original path as there is nothing to process.
+            print("Warning: No segments were left after removing fillers. Returning original path.")
+            return video_path
+
+    finally:
+        # --- THIS IS THE CRITICAL CLEANUP BLOCK ---
+        # This 'finally' block ensures that the .close() methods are called
+        # no matter what happens, even if an error occurs.
+        print("Cleaning up video resources...")
+        if video:
+            video.close()
+        if final_clip:
+            final_clip.close()
     video = VideoFileClip(video_path)
     segments = []
 
@@ -165,6 +209,8 @@ def remove_filler_words_from_video(video_path: str, filler_timestamps: list, out
     final = concatenate_videoclips(segments)
     output_path = output_path or Path(video_path).with_name(Path(video_path).stem + "_no_filler.mp4")
     final.write_videofile(str(output_path), codec="libx264", audio_codec="aac")
+    video.close()
+
     return str(output_path)
 
 def remove_filler_words_smooth(video_path: str,
