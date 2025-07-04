@@ -13,8 +13,8 @@ celery_app = Celery(
 )
 
 celery_app.conf.update(
-    task_soft_time_limit=300,
-    task_time_limit=600,
+    task_soft_time_limit=1800,
+    task_time_limit=1860,
     result_expires=3600,
     task_serializer='json',
     accept_content=['json'],
