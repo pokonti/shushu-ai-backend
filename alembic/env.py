@@ -23,6 +23,7 @@ if os.path.exists(dotenv_path):
 else:
     print(".env file not found, relying on shell environment variables.")
 
+
 # Now that the path is set up, we can import correctly
 from src.database import Base
 
@@ -59,7 +60,10 @@ def run_migrations_offline() -> None:
     script output.
 
     """
-    url = config.get_main_option("sqlalchemy.url")
+    database_url = os.getenv("DATABASE_URL")
+    if not database_url:
+        raise RuntimeError("DATABASE_URL not set in .env or environment")
+    url = config.set_main_option("sqlalchemy.url", database_url)
     context.configure(
         url=url,
         target_metadata=target_metadata,
