@@ -195,7 +195,7 @@ async def _process_video_async(job_id: int, object_name: str, options: dict, use
             # --- Stage 5: Recombine and Final Upload ---
             # Recombine the final processed audio with the original video.
             print(f"Recombining final audio ('{os.path.basename(current_audio_path)}') with original video...")
-            final_video_local_path = replace_audio_in_video(current_video_path, current_audio_path)
+            final_video_local_path = replace_audio_in_video(current_video_path, current_audio_path, temp_dir)
             # Upload the final video file to Spaces.
             print(f"Uploading final processed video '{os.path.basename(final_video_local_path)}' to Spaces...")
             processed_object_name = object_name.replace("originals/", "processed/")
