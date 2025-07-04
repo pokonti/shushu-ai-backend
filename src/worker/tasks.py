@@ -219,12 +219,12 @@ async def _process_video_async(job_id: int, object_name: str, options: dict, use
         db.close()
 
 
-@celery_app.task(bind=True)
+@celery_app.task(bind=True, soft_time_limit=600, time_limit=660)
 def process_audio_task(self, job_id: int, object_name: str, options: dict, user_id: int):
     return asyncio.run(_process_audio_async(job_id, object_name, options, user_id))
 
 
-@celery_app.task(bind=True)
+@celery_app.task(bind=True, soft_time_limit=3600, time_limit=3660)
 def process_video_task(self, job_id: int, object_name: str, options: dict, user_id: int):
     return asyncio.run(_process_video_async(job_id, object_name, options, user_id))
 
