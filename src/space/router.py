@@ -164,7 +164,7 @@ async def process_video(
                     f.write(response.content)
 
             current_audio_path = denoised_local_path
-            current_video_path = replace_audio_in_video(original_video_local_path, current_audio_path)
+            current_video_path = replace_audio_in_video(original_video_local_path, current_audio_path, temp_dir)
             print(f"Denoising complete. New working audio: {current_audio_path}")
 
         # --- Stage 3: Conditional Filler Word Removal ---
@@ -198,7 +198,7 @@ async def process_video(
         # --- Stage 5: Recombine and Final Upload ---
         # Recombine the final processed audio with the original video.
         print(f"Recombining final audio ('{os.path.basename(current_audio_path)}') with original video...")
-        final_video_local_path = replace_audio_in_video(current_video_path, current_audio_path)
+        final_video_local_path = replace_audio_in_video(current_video_path, current_audio_path, temp_dir)
         # Upload the final video file to Spaces.
         print(f"Uploading final processed video '{os.path.basename(final_video_local_path)}' to Spaces...")
         processed_object_name = object_name.replace("originals/", "processed/")
