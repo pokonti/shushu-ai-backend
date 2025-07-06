@@ -10,28 +10,22 @@ import sys
 from dotenv import load_dotenv
 
 project_root = os.path.join(os.path.dirname(__file__), '..')
-
-# Add the project root to the Python path.
-# This allows us to import from the 'src' package.
 sys.path.append(project_root)
-
-# Load the .env file from the project root
 dotenv_path = os.path.join(project_root, '.env')
 if os.path.exists(dotenv_path):
     print(f"Loading .env file from: {dotenv_path}")
     load_dotenv(dotenv_path=dotenv_path)
-else:
-    print(".env file not found, relying on shell environment variables.")
 
-database_url = os.getenv("DATABASE_URL")
-if not database_url:
-    raise RuntimeError("DATABASE_URL not set in .env or environment")
-# Now that the path is set up, we can import correctly
 from src.database import Base
 
-# this is the Alembic Config object, which provides
-# access to the values within the .ini file in use.
 config = context.config
+
+db_url = os.getenv("DATABASE_URL")
+if not db_url:
+    raise RuntimeError("FATAL: DATABASE_URL environment variable not set.")
+config.set_main_option("sqlalchemy.url", db_url)
+
+
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
@@ -62,9 +56,9 @@ def run_migrations_offline() -> None:
     script output.
 
     """
-    url = config.set_main_option("sqlalchemy.url", database_url)
+    url = config.set_main_option("sqlalchemy.url", db_url)
     context.configure(
-        url=url,
+        url=db_url,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
