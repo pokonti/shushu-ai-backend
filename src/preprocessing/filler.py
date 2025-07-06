@@ -160,12 +160,12 @@ def remove_filler_words_from_video(video_path: str, filler_timestamps: list, out
         prev_end = 0
         for filler in filler_timestamps:
             if filler["start"] > prev_end:
-                segments.append(video.subclip(prev_end, filler["start"]))
+                segments.append(video.subclipped(prev_end, filler["start"]))
             prev_end = filler["end"]
 
         # Add the final segment after the last filler word
         if prev_end < video.duration:
-            segments.append(video.subclip(prev_end, video.duration))
+            segments.append(video.subclipped(prev_end, video.duration))
 
         # If there are segments to concatenate, do so
         if segments:
@@ -194,6 +194,7 @@ def remove_filler_words_from_video(video_path: str, filler_timestamps: list, out
             video.close()
         if final_clip:
             final_clip.close()
+
     video = VideoFileClip(video_path)
     segments = []
 
@@ -282,8 +283,8 @@ def remove_filler_words_smooth(video_path: str,
         codec="libx264",
         audio_codec="aac",
         threads=4,
-        preset="fast",
-        ffmpeg_params=["-crf", "22", "-movflags", "+faststart"]
+        preset="superfast",
+        ffmpeg_params=["-crf", "24", "-movflags", "+faststart"]
     )
 
     return str(output_path)
