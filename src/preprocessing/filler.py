@@ -283,7 +283,7 @@ def remove_filler_words_smooth(video_path: str,
         codec="libx264",
         audio_codec="aac",
         threads=4,
-        preset="superfast",
+        preset="ultrafast",
         ffmpeg_params=["-crf", "24", "-movflags", "+faststart"]
     )
 
