@@ -16,7 +16,7 @@ class Audio(Base):
     object_name = Column(Text, nullable=False)
     public_url = Column(Text, nullable=True)
 
-    status = Column(String, default="PENDING")  # PENDING, PROCESSING, COMPLETED, FAILED
+    status = Column(String, default="PENDING")
     summary = Column(String, nullable=True)
     error_message = Column(String, nullable=True)
 
@@ -34,7 +34,7 @@ class Video(Base):
     object_name = Column(Text, nullable=False)
     public_url = Column(Text, nullable=True)
 
-    status = Column(String, default="PENDING")  # PENDING, PROCESSING, COMPLETED, FAILED
+    status = Column(String, default="PENDING")
     summary = Column(String, nullable=True)
     error_message = Column(String, nullable=True)
 

@@ -5,8 +5,8 @@ from sqlalchemy.orm import Session
 
 from fastapi.middleware.cors import CORSMiddleware
 from src.auth.router import router as auth_router
-from src.worker.router import router as worker_router
 from src.space.router import router as space_router
+from src.shorts.router import router as shorts_router
 app = FastAPI()
 
 origins = [
@@ -34,5 +34,8 @@ app.include_router(auth_router)
 
 # app.include_router(preprocessing_router)
 
-app.include_router(worker_router)
+# app.include_router(worker_router)
 app.include_router(space_router)
+
+app.include_router(shorts_router)
+
