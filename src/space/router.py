@@ -16,7 +16,7 @@ def generate_upload_url(filename: str, user: User = Depends(get_current_user)):
     """
     ENDPOINT 1: The frontend calls this first to get permission to upload.
     """
-    if not filename.endswith((".mp4", ".mov", ".mkv", ".mp3", ".wav")):
+    if not filename.endswith((".mp4", ".mov", ".mkv", ".mp3", ".wav", '.MP4', '.MOV', '.MKV', '.MP3', '.WAV')):
         raise HTTPException(status_code=400, detail="Unsupported file format")
 
     # Changed from create_signed_upload_url to create_presigned_upload_url
